@@ -1,18 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { supabase } from "./lib/supabase";
 import { useSearchParams } from "next/navigation";
 import { QRCodeCanvas } from "qrcode.react";
 
-export default function Home() {
+function AppContent() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [points, setPoints] = useState(0);
 
   const searchParams = useSearchParams();
 
-  // 🔥 Fetch points
   const fetchPoints = async (phoneNumber: string) => {
     if (!phoneNumber) return;
 
@@ -22,8 +21,6 @@ export default function Home() {
       .eq("phone", phoneNumber)
       .single();
 
-    console.log("FETCH DATA:", data);
-
     if (data) {
       setPoints(data.points);
       setName(data.name);
@@ -32,7 +29,6 @@ export default function Home() {
     }
   };
 
-  // 🔥 QR AUTO LOAD
   useEffect(() => {
     const phoneFromQR = searchParams.get("phone");
 
@@ -42,50 +38,33 @@ export default function Home() {
     }
   }, [searchParams]);
 
-  // 🔥 MAIN LOGIC
   const handleSubmit = async () => {
     if (phone.length !== 10) {
       alert("Enter valid 10 digit phone");
       return;
     }
 
-    const { data: existingUser, error } = await supabase
+    const { data: existingUser } = await supabase
       .from("customers")
       .select("*")
       .eq("phone", phone)
       .single();
 
-    console.log("USER:", existingUser);
-
-    if (error && error.code !== "PGRST116") {
-      console.log(error);
-      alert("Error fetching user");
-      return;
-    }
-
     const now = new Date();
 
     if (existingUser) {
-      console.log("LAST STAMP:", existingUser.last_stamp);
-
       const last = existingUser.last_stamp
         ? new Date(existingUser.last_stamp)
         : null;
 
-      if (last) {
-        const diff = now.getTime() - last.getTime();
-        console.log("TIME DIFF:", diff);
-
-        // 🔥 cooldown
-        if (diff < 10000) {
-          alert("❌ Cooldown active (wait 10 sec)");
-          return;
-        }
+      if (last && now.getTime() - last.getTime() < 10000) {
+        alert("Wait 10 sec ⏳");
+        return;
       }
 
       const newPoints = existingUser.points + 1;
 
-      const { error: updateError } = await supabase
+      await supabase
         .from("customers")
         .update({
           points: newPoints,
@@ -93,26 +72,20 @@ export default function Home() {
         })
         .eq("phone", phone);
 
-      console.log("UPDATE ERROR:", updateError);
-
       setPoints(newPoints);
       alert(`Points: ${newPoints}`);
     } else {
-      const { error: insertError } = await supabase
-        .from("customers")
-        .insert([
-          {
-            name,
-            phone,
-            points: 1,
-            last_stamp: now.toISOString(),
-          },
-        ]);
-
-      console.log("INSERT ERROR:", insertError);
+      await supabase.from("customers").insert([
+        {
+          name,
+          phone,
+          points: 1,
+          last_stamp: now.toISOString(),
+        },
+      ]);
 
       setPoints(1);
-      alert("New user added 🎉");
+      alert("New user 🎉");
     }
 
     setName("");
@@ -126,12 +99,11 @@ export default function Home() {
         
         <h1 className="text-2xl font-bold mb-4">Loyalty Card</h1>
 
-        {/* ⭐ Stars */}
         <div className="grid grid-cols-5 gap-2 mb-6">
           {Array.from({ length: 10 }).map((_, i) => (
             <div
               key={i}
-              className={`w-10 h-10 rounded-full border flex items-center justify-center text-xl ${
+              className={`w-10 h-10 rounded-full border flex items-center justify-center ${
                 i < points ? "bg-yellow-100" : "bg-gray-100"
               }`}
             >
@@ -140,7 +112,6 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Name */}
         <input
           className="border p-2 w-full mb-3 rounded"
           placeholder="Enter Name"
@@ -148,7 +119,6 @@ export default function Home() {
           onChange={(e) => setName(e.target.value)}
         />
 
-        {/* Phone */}
         <input
           type="tel"
           maxLength={10}
@@ -177,15 +147,21 @@ export default function Home() {
           Add Stamp
         </button>
 
-        {/* QR */}
         {phone.length === 10 && (
           <div className="mt-4 flex flex-col items-center">
             <p className="mb-2 text-sm text-gray-500">Scan QR</p>
             <QRCodeCanvas value={qrValue} size={150} />
           </div>
         )}
-
       </div>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AppContent />
+    </Suspense>
   );
 }
