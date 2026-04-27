@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { supabase } from "./lib/supabase";
 import { useSearchParams } from "next/navigation";
 
-export default function Home() {
+// 👉 MAIN UI COMPONENT
+function LoyaltyApp() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [points, setPoints] = useState(0);
@@ -29,7 +30,7 @@ export default function Home() {
     }
   };
 
-  // 🔥 QR AUTO LOAD
+  // 🔥 QR AUTO LOAD FIXED
   useEffect(() => {
     const phoneFromQR = searchParams.get("phone");
 
@@ -37,8 +38,9 @@ export default function Home() {
       setPhone(phoneFromQR);
       fetchPoints(phoneFromQR);
     }
-  }, []);
+  }, [searchParams]);
 
+  // 🔥 Submit logic
   const handleSubmit = async () => {
     const { data: existingUser, error } = await supabase
       .from("customers")
@@ -128,5 +130,14 @@ export default function Home() {
 
       </div>
     </div>
+  );
+}
+
+// 👉 IMPORTANT: Suspense wrapper (build fix)
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="text-center mt-10">Loading...</div>}>
+      <LoyaltyApp />
+    </Suspense>
   );
 }
